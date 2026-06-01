@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QCM Ultime - SAÉ 2.03 Gestion de Tickets</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .quiz-container { max-width: 800px; margin: 40px auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .option-btn { width: 100%; text-align: left; margin-bottom: 10px; white-space: normal; border-radius: 8px; font-weight: 500; transition: all 0.2s; }
+        .option-btn:hover { background-color: #e9ecef; }
+        .correct { background-color: #198754 !important; color: white !important; border-color: #198754; }
+        .wrong { background-color: #dc3545 !important; color: white !important; border-color: #dc3545; }
+        #explanation { display: none; margin-top: 20px; padding: 15px; border-radius: 8px; font-size: 0.95rem; }
+        .progress { height: 10px; margin-bottom: 20px; }
+        #result-screen { display: none; text-align: center; }
+        .huge-score { font-size: 4rem; font-weight: bold; color: #0d6efd; }
+    </style>
+</head>
+<body>
+
+<div class="container quiz-container" id="quiz-screen">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0 text-primary">Révision TP2</h4>
+        <span id="question-tracker" class="badge bg-secondary fs-6">Question 1 / 50</span>
+    </div>
+    
+    <div class="progress">
+        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+    </div>
+
+    <h3 id="question-text" class="mt-4 mb-4" style="line-height: 1.4;">Chargement de la question...</h3>
+
+    <div id="options-area">
+        </div>
+
+    <div id="explanation" class="alert alert-info">
+        <strong>Explication :</strong> <span id="explanation-text"></span>
+    </div>
+
+    <button id="next-btn" class="btn btn-primary btn-lg mt-4 w-100" style="display: none;" onclick="nextQuestion()">Question Suivante ➔</button>
+</div>
+
+<div class="container quiz-container" id="result-screen">
+    <h1 class="mb-4">Simulation Terminée !</h1>
+    <p class="fs-4">Ton score final est de :</p>
+    <div class="huge-score mb-4"><span id="final-score">0</span> / 50</div>
+    <p id="feedback-message" class="fs-5 mb-4"></p>
+    <button class="btn btn-primary btn-lg" onclick="location.reload()">Refaire la simulation</button>
+</div>
+
+<script>
+const questions = [
+    // --- BDD & SQL ---
+    { q: "Pourquoi a-t-on modifié la colonne `mot_de_passe` pour accepter NULL ?", options: ["Pour que le code PHP aille plus vite.", "Pour permettre aux clients de suivre un ticket sans se créer un compte complet.", "Pour empêcher les piratages."], correct: 1, exp: "La V1 imposait un mot de passe à tout le monde. Accepter NULL permet de différencier les simples clients des vrais administrateurs sans inventer de faux mots de passe." },
+    { q: "Que fait la propriété `AUTO_INCREMENT` sur `id_ticket` ?", options: ["Elle trie les tickets.", "Elle demande à la BDD de générer le numéro ID (1, 2, 3...) automatiquement.", "Elle génère l'UID de 10 caractères."], correct: 1, exp: "AUTO_INCREMENT délègue le comptage à la base de données lors d'un INSERT." },
+    { q: "À quoi sert la contrainte `UNIQUE` sur la colonne `uid_ticket` ?", options: ["Elle garantit que la base refusera d'enregistrer deux tickets avec le même UID.", "Elle chiffre l'UID.", "Elle limite l'UID à une seule utilisation."], correct: 0, exp: "UNIQUE est une sécurité côté Base de données. Même si PHP bug et génère un doublon, MySQL bloquera l'insertion." },
+    { q: "Quel est l'avantage de l'UID (ex: A7K9PL2MX1) par rapport à un ID numérique (ex: 4) ?", options: ["Il prend moins d'espace.", "Il est plus joli.", "Il empêche de deviner les URL des autres tickets (faille IDOR)."], correct: 2, exp: "Un pirate peut facilement essayer id=5, id=6... Un UID à 10 caractères aléatoires est mathématiquement intraçable." },
+    { q: "Qu'est-ce qu'une Clé Étrangère (`id_utilisateur` dans la table Ticket) ?", options: ["Un mot de passe crypté.", "Un lien qui pointe vers l'identifiant (Clé Primaire) d'une autre table.", "Une colonne qui stocke des adresses IP."], correct: 1, exp: "C'est la base des bases de données relationnelles. Au lieu de copier le nom du client dans le ticket, on met juste son ID." },
+    { q: "Que fait `DEFAULT CURRENT_TIMESTAMP` sur la colonne `date_creation` ?", options: ["Elle met la date à zéro.", "Elle insère automatiquement la date et l'heure exactes au moment de la création.", "Elle demande l'heure au navigateur du client."], correct: 1, exp: "C'est très pratique, ça évite de devoir calculer et envoyer la date depuis le code PHP." },
+    { q: "Quel risque prend-on si on fait un DELETE d'un utilisateur alors qu'il a l'option `ON DELETE CASCADE` ?", options: ["Le site va planter.", "Tous les tickets liés à cet utilisateur seront aussi définitivement supprimés.", "Rien, c'est sans danger."], correct: 1, exp: "C'est pourquoi on préfère souvent une suppression logique (is_deleted = 1) en entreprise." },
+    { q: "Quel type de donnée est idéal pour stocker le statut du ticket en base ?", options: ["VARCHAR ou ENUM", "INT", "BOOLEAN"], correct: 0, exp: "Un ENUM limite les choix (ouvert, en_cours, ferme) ou un VARCHAR stocke le texte directement." },
+    { q: "Dans `donnees.sql`, pourquoi ne précise-t-on pas l'ID quand on insère un nouveau Service ?", options: ["Parce qu'on l'a oublié.", "Parce qu'on a défini la colonne en AUTO_INCREMENT.", "Parce que l'ID n'est pas obligatoire."], correct: 1, exp: "MySQL gère cette colonne tout seul. Si on précise juste le nom, il mettra le bon numéro." },
+    { q: "Laquelle de ces commandes SQL modifie une donnée existante ?", options: ["SELECT", "INSERT INTO", "UPDATE"], correct: 2, exp: "UPDATE modifie. INSERT ajoute. SELECT lit." },
+
+    // --- CONFIG & PDO ---
+    { q: "Quel est le rôle strict du fichier `config.php` ?", options: ["Afficher le menu du site.", "Générer les mots de passe.", "Créer le pont (connexion PDO) entre PHP et la base de données MySQL."], correct: 2, exp: "Sans config.php, ton code PHP ne peut pas parler avec la base de données." },
+    { q: "Que signifie PDO ?", options: ["PHP Data Objects", "Public Domain Output", "Private Data Operator"], correct: 0, exp: "C'est l'extension native et sécurisée de PHP pour manipuler les bases de données." },
+    { q: "Pourquoi met-on le code de connexion PDO dans un bloc `try { ... } catch { ... }` ?", options: ["Pour crypter les erreurs.", "Pour empêcher un crash total de la page si la base de données est hors ligne, et afficher un message propre.", "Pour accélérer la connexion."], correct: 1, exp: "Le try teste. Si ça plante (Exception), le catch intercepte l'erreur proprement avec un die()." },
+    { q: "Quelle est la différence fondamentale entre `include_once` et `require_once` ?", options: ["require_once coupe tout le script si le fichier manque, include_once affiche une erreur mais continue.", "require est pour le HTML, include pour le PHP.", "Il n'y a aucune différence."], correct: 0, exp: "C'est une question de la prof ! Pour les fichiers vitaux comme config.php, on veut que ça coupe tout si c'est introuvable." },
+    { q: "Que fait `PDO::ERRMODE_EXCEPTION` ?", options: ["Il ignore les erreurs.", "Il force PDO à déclencher une erreur violente à la moindre faute de frappe en SQL (idéal pour débugger).", "Il supprime la base de données en cas d'erreur."], correct: 1, exp: "Sans ça, PDO échouerait silencieusement et tu ne saurais pas pourquoi ta requête ne marche pas." },
+
+    // --- SECURITE & FONCTIONS ---
+    { q: "Quel est le plus grand danger si on ne prépare pas une requête SQL (`prepare()`) ?", options: ["Le code est moche.", "L'injection SQL (un pirate peut taper du code dans un formulaire pour casser la base).", "La requête prendra trop de temps."], correct: 1, exp: "Les requêtes préparées avec des '?' remplacent les variables en toute sécurité et neutralisent le code malveillant." },
+    { q: "Que fait la fonction `htmlspecialchars()` ?", options: ["Elle met le texte en couleur.", "Elle convertit les caractères spéciaux en texte inoffensif pour bloquer les failles XSS.", "Elle traduit le texte en anglais."], correct: 1, exp: "Indispensable dès qu'on affiche un texte qui a été tapé par un utilisateur (comme le sujet ou la description)." },
+    { q: "À quoi sert la boucle `do { ... } while (!isTicketUidUnique);` lors de la création d'un ticket ?", options: ["À générer 10 tickets d'un coup.", "À générer un code, puis vérifier dans la BDD s'il existe. Si oui, elle recommence jusqu'à avoir un code 100% unique.", "À attendre que la BDD réponde."], correct: 1, exp: "C'est la garantie absolue de ne jamais avoir deux tickets avec le même UID." },
+    { q: "Pourquoi la fonction `createUser` prend-elle `?string $password_hash` en paramètre (avec un ?) ?", options: ["Le point d'interrogation est une faute de frappe.", "Il indique à PHP que cette variable peut être un texte, OU être `null`.", "Il demande à PHP de deviner le mot de passe."], correct: 1, exp: "C'est indispensable depuis le TP2 car on passe 'null' pour les utilisateurs non-admins." },
+    { q: "Quelle fonction native compare un mot de passe en clair (tapé par l'admin) avec le charabia de la base de données ?", options: ["password_verify()", "md5()", "check_password()"], correct: 0, exp: "On ne compare jamais deux mots de passe avec un simple '=='. password_verify() fait le calcul cryptographique complexe." },
+    { q: "Que fait la fonction `trim()` sur `$_POST['email']` ?", options: ["Elle raccourcit l'email.", "Elle nettoie les espaces tapés par erreur au début et à la fin.", "Elle vérifie si l'email a un @."], correct: 1, exp: "Si un client tape ' jean@mail.com ', trim le nettoie en 'jean@mail.com'." },
+    { q: "Pourquoi utilise-t-on `nl2br()` pour afficher la description d'un ticket ?", options: ["Pour limiter à 200 mots.", "Pour transformer les retours à la ligne tapés au clavier en vraies balises HTML `<br>`.", "Pour mettre le texte en gras."], correct: 1, exp: "Sans nl2br, un texte tapé sur 3 paragraphes s'afficherait en un seul gros bloc collé." },
+
+    // --- CREATION DE TICKET (submit / index) ---
+    { q: "Dans `index.php`, à quoi sert l'attribut `required` dans `<input type='email' required>` ?", options: ["À forcer le navigateur à bloquer l'envoi du formulaire si la case est vide.", "À mettre un astérisque rouge.", "À vérifier que l'email est vrai."], correct: 0, exp: "C'est une vérification Front-end (côté client)." },
+    { q: "Quelle est la différence entre `method='POST'` et `method='GET'` pour un formulaire ?", options: ["GET est plus sécurisé.", "POST envoie les données de façon invisible, GET les met en clair dans l'URL.", "Aucune différence."], correct: 1, exp: "Pour tout ce qui ajoute des données en base (ou les mots de passe), on utilise toujours POST." },
+    { q: "Pourquoi a-t-on rajouté les champs 'Nom' et 'Prénom' obligatoires à l'Étape 2 ?", options: ["Pour faire joli.", "Parce que PHP ne marche pas sans nom.", "Pour améliorer la qualité des données stockées, afin que l'admin sache à qui il parle au lieu d'avoir des comptes anonymes."], correct: 2, exp: "C'était une question de réflexion de la prof. Une BDD propre = une meilleure gestion." },
+    { q: "Que contient la superglobale `$_POST` dans `submit_ticket.php` ?", options: ["Les erreurs de la base de données.", "Un tableau contenant toutes les valeurs tapées par le client dans le formulaire.", "L'adresse IP du client."], correct: 1, exp: "Si tu as un `<input name='sujet'>`, tu le récupères avec `$_POST['sujet']`." },
+    { q: "Que fait `$pdo->lastInsertId()` après l'exécution de la création du ticket ?", options: ["Il supprime le dernier ticket.", "Il interroge la base pour récupérer l'ID (1, 2, 3...) qu'elle vient juste de générer pour ce nouveau ticket.", "Il donne l'ID de l'admin."], correct: 1, exp: "C'est vital pour récupérer le numéro généré par l'AUTO_INCREMENT." },
+    { q: "Que fait `header('Location: track_ticket.php...');` ?", options: ["Elle imprime un titre.", "Elle redirige immédiatement le navigateur de l'utilisateur vers cette nouvelle page.", "Elle sauvegarde le fichier."], correct: 1, exp: "C'est comme ça qu'on passe de la page de traitement invisible à la page d'affichage du résultat." },
+
+    // --- SUIVI DU TICKET (track_ticket) ---
+    { q: "Quelle est la faille corrigée par la 'double vérification' dans `track_ticket.php` ?", options: ["La faille XSS.", "Le fait que quelqu'un ayant trouvé l'UID puisse lire le ticket. Il faut désormais l'UID ET l'email (quelque chose de possédé + connu).", "La lenteur du site."], correct: 1, exp: "C'est l'équivalent de l'authentification à deux facteurs. Si tu voles le code, il te manque encore l'email." },
+    { q: "Que signifie `isset($_GET['uid'])` ?", options: ["Est-ce que l'UID a été supprimé ?", "Est-ce que la variable 'uid' est présente (définie) dans l'URL de la page ?", "Est-ce que l'UID est égal à zéro ?"], correct: 1, exp: "isset = is set (est défini). $_GET récupère les variables de l'URL." },
+    { q: "À quoi sert un `switch` dans le code de la page de suivi ?", options: ["À allumer la session.", "À tester le statut du ticket (ouvert, en cours, fermé) pour afficher des badges de couleurs différentes.", "À changer de page."], correct: 1, exp: "Le switch est une syntaxe plus propre et lisible que de faire une longue suite de 'if / elseif / else'." },
+    { q: "Pourquoi met-on `$error_message = '';` tout en haut du fichier ?", options: ["Pour effacer la base.", "Pour initialiser la variable à vide et éviter que PHP ne crashe plus bas s'il essaie de l'afficher.", "Pour cacher les erreurs fatales."], correct: 1, exp: "En PHP, on déclare toujours ses variables proprement avant de s'en servir." },
+
+    // --- LE TABLEAU DE BORD ADMIN ---
+    { q: "Que fait `session_start();` au tout début des fichiers ?", options: ["Il démarre MySQL.", "Il allume la mémoire du serveur PHP pour qu'il puisse conserver des variables (comme l'ID de l'admin connecté) en naviguant de page en page.", "Il ouvre une fenêtre."], correct: 1, exp: "Sans session, chaque page Web est amnésique et oublie qui tu es." },
+    { q: "Comment le Dashboard Admin vérifie-t-il que personne ne s'y introduit en douce ?", options: ["Avec un mot de passe dans l'URL.", "En vérifiant avec `if (!isset($_SESSION['admin_id']))`. Si ce badge n'est pas en mémoire, il redirige l'intrus vers login.php.", "En demandant l'email à chaque clic."], correct: 1, exp: "C'est la technique de sécurisation standard de tous les espaces membres en PHP." },
+    { q: "À quoi sert la commande SQL `LEFT JOIN Utilisateur u ON t.id_utilisateur = u.id_utilisateur` ?", options: ["À afficher le tableau à gauche.", "À fusionner la table Ticket avec la table Utilisateur pour récupérer le vrai Nom/Prénom au lieu d'afficher un simple chiffre (ID).", "À supprimer les utilisateurs inactifs."], correct: 1, exp: "C'est l'essence même d'une base relationnelle. Le JOIN rassemble les pièces du puzzle." },
+    { q: "Dans la requête du Dashboard, que fait `ORDER BY t.date_creation DESC` ?", options: ["Trie les tickets par ordre alphabétique.", "Trie les tickets du plus récent au plus ancien (Descendant).", "Mélange les tickets."], correct: 1, exp: "DESC = Descendant. ASC = Ascendant (du plus vieux au plus récent)." },
+    { q: "Comment s'appelle la méthode PDO pour récupérer toutes les lignes d'un coup dans un grand tableau ?", options: ["fetchAll()", "getAll()", "fetch()"], correct: 0, exp: "fetch() ne ramène qu'une seule ligne. fetchAll() ramène tout le tableau de résultats." },
+    { q: "À quoi sert la boucle `foreach ($tickets as $ticket)` dans le code HTML du Dashboard ?", options: ["À supprimer tous les tickets.", "À parcourir le grand tableau de tickets, et répéter automatiquement la ligne `<tr>` HTML pour chaque ticket trouvé.", "À compter les tickets."], correct: 1, exp: "Si la BDD renvoie 50 tickets, la boucle foreach écrira 50 lignes dans ton tableau." },
+    { q: "Dans le bouton 'Gérer', comment transmet-on l'ID du ticket à la page suivante ?", options: ["Par Bluetooth.", "Via un cookie.", "En l'intégrant dans l'URL du lien (ex: `href='update_ticket.php?id=5'`)."], correct: 2, exp: "C'est la méthode GET. La page d'arrivée lira $_GET['id'] pour savoir quoi modifier." },
+
+    // --- MISE A JOUR & LOGOUT ---
+    { q: "Dans `login.php`, pourquoi la requête SQL cherche-t-elle `AND role = 'administrateur'` ?", options: ["Pour que la requête soit plus longue.", "Pour interdire formellement aux utilisateurs ayant le rôle 'utilisateur' de se connecter au panel, même s'ils ont un mot de passe.", "Pour changer le rôle du client."], correct: 1, exp: "Une sécurité SQL imparable pour diviser les droits." },
+    { q: "Dans `update_ticket.php`, pourquoi utilise-t-on `intval($_GET['id'])` ?", options: ["Pour crypter l'ID.", "C'est une sécurité. Elle force la donnée de l'URL à devenir un nombre entier pur. Si un pirate tape `id=abc`, ça deviendra 0.", "Pour transformer un chiffre en texte."], correct: 1, exp: "Ne jamais faire confiance à ce qui se trouve dans l'URL (qui peut être tapé par n'importe qui)." },
+    { q: "Que se passe-t-il si j'oublie la clause `WHERE id_ticket = ?` dans ma requête `UPDATE` ?", options: ["Rien.", "L'UPDATE s'appliquera à TOUS les tickets de la table (catastrophe).", "La base de données sera effacée."], correct: 1, exp: "C'est l'erreur la plus redoutée des développeurs. Un UPDATE sans WHERE modifie tout le fichier." },
+    { q: "Que fait le code `<option ... selected>` dans le menu déroulant du statut ?", options: ["Il bloque le menu.", "Il pré-sélectionne le statut actuel du ticket dans la liste déroulante pour que l'admin ne parte pas de zéro.", "Il supprime cette option."], correct: 1, exp: "C'est l'expérience utilisateur (UX). On affiche l'ancienne valeur par défaut." },
+    { q: "À quoi sert `session_destroy()` dans le fichier `logout.php` ?", options: ["À supprimer le compte de l'admin.", "À détruire la mémoire de la session côté serveur, pour retirer définitivement les droits d'accès et déconnecter l'utilisateur.", "À éteindre le serveur."], correct: 1, exp: "Indispensable pour éviter que la personne suivante sur l'ordinateur n'ait accès au panel." },
+    
+    // --- QUESTIONS EVOLUTION ETAPE 5 (Statistiques & Bonus) ---
+    { q: "Comment ajouter un statut 'Archivé' en base de données ?", options: ["Créer une nouvelle table.", "Ajouter simplement la valeur 'archive' aux choix possibles de la colonne `statut_ticket`.", "C'est impossible."], correct: 1, exp: "C'était la réponse pour ton rapport d'étape 5. L'archivage permet de cacher les vieux tickets du Dashboard par défaut." },
+    { q: "Qu'est-ce qu'une 'Suppression Logique' (Corbeille) ?", options: ["Faire un DELETE FROM.", "Ajouter une colonne booléenne `is_deleted` et la passer à 1 (Vrai) au lieu d'effacer la donnée.", "Supprimer avec la touche Suppr."], correct: 1, exp: "Cela permet de conserver l'historique et de créer une vue 'Corbeille' pour restaurer les tickets si besoin." },
+    { q: "Quelle fonction SQL utiliser pour avoir le nombre total de tickets pour des statistiques ?", options: ["SUM()", "MAX()", "COUNT()"], correct: 2, exp: "COUNT() compte le nombre de lignes. SUM() additionne des valeurs." },
+    { q: "Quelle clause SQL utiliser avec COUNT() pour afficher le nombre de tickets PAR statut (ex: 5 ouverts, 2 fermés) ?", options: ["GROUP BY statut_ticket", "ORDER BY statut_ticket", "FILTER BY"], correct: 0, exp: "GROUP BY va regrouper les lignes qui ont le même statut, puis le COUNT va les compter paquet par paquet." },
+    { q: "Comment bloquer la suppression d'un 'Super Administrateur' en PHP ?", options: ["En croisant les doigts.", "En mettant un `if ($user['role'] == 'super_admin') { exit(); }` avant la requête de suppression.", "En masquant son nom."], correct: 1, exp: "La vérification back-end (en PHP) est la seule vraie protection, même si on cache le bouton." },
+    { q: "Au final, quel était l'objectif pédagogique principal de l'Étape 3 du TP2 ?", options: ["Faire du design Bootstrap.", "Sécuriser le suivi d'un objet (le ticket) en passant d'un ID vulnérable à un code unique fort (UID) combiné à une info personnelle (Email).", "Apprendre à faire des requêtes JOIN."], correct: 1, exp: "C'est la réponse parfaite si la prof te demande 'À quoi a servi le TP2 ?'." }
+];
+
+let currentQuestion = 0;
+let score = 0;
+let answered = false;
+
+const questionText = document.getElementById('question-text');
+const optionsArea = document.getElementById('options-area');
+const explanationBox = document.getElementById('explanation');
+const explanationText = document.getElementById('explanation-text');
+const nextBtn = document.getElementById('next-btn');
+const progressBar = document.getElementById('progress-bar');
+const tracker = document.getElementById('question-tracker');
+const quizScreen = document.getElementById('quiz-screen');
+const resultScreen = document.getElementById('result-screen');
+
+function shuffleOptions(options, correctIndex) {
+    let arr = options.map((opt, i) => ({ text: opt, isCorrect: i === correctIndex }));
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function loadQuestion() {
+    answered = false;
+    explanationBox.style.display = 'none';
+    nextBtn.style.display = 'none';
+    optionsArea.innerHTML = '';
+    
+    let q = questions[currentQuestion];
+    questionText.innerHTML = q.q;
+    tracker.innerText = `Question ${currentQuestion + 1} / ${questions.length}`;
+    
+    let percent = ((currentQuestion) / questions.length) * 100;
+    progressBar.style.width = percent + '%';
+
+    let shuffledOptions = shuffleOptions(q.options, q.correct);
+
+    shuffledOptions.forEach((opt, index) => {
+        let btn = document.createElement('button');
+        btn.className = 'btn btn-outline-primary btn-lg option-btn';
+        btn.innerHTML = opt.text;
+        btn.onclick = () => checkAnswer(btn, opt.isCorrect, q.exp, shuffledOptions);
+        optionsArea.appendChild(btn);
+    });
+}
+
+function checkAnswer(selectedBtn, isCorrect, explanation, shuffledOptions) {
+    if (answered) return;
+    answered = true;
+
+    let buttons = optionsArea.querySelectorAll('.option-btn');
+    
+    buttons.forEach((btn, index) => {
+        btn.disabled = true;
+        if (shuffledOptions[index].isCorrect) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('correct');
+        } else if (btn === selectedBtn && !isCorrect) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('wrong');
+        }
+    });
+
+    if (isCorrect) score++;
+
+    explanationText.innerHTML = explanation;
+    explanationBox.style.display = 'block';
+    
+    if (currentQuestion < questions.length - 1) {
+        nextBtn.innerHTML = "Question Suivante ➔";
+    } else {
+        nextBtn.innerHTML = "Voir mon Résultat Final 🏆";
+    }
+    nextBtn.style.display = 'block';
+}
+
+function nextQuestion() {
+    currentQuestion++;
+    if (currentQuestion < questions.length) {
+        loadQuestion();
+    } else {
+        showResults();
+    }
+}
+
+function showResults() {
+    quizScreen.style.display = 'none';
+    resultScreen.style.display = 'block';
+    document.getElementById('final-score').innerText = score;
+    
+    let msg = "";
+    if (score >= 45) msg = "Incroyable ! Tu maîtrises le projet de A à Z. L'évaluation sera une formalité ! 🚀";
+    else if (score >= 35) msg = "Très bon travail ! Tu as compris l'architecture globale, relis juste quelques points techniques. 👍";
+    else if (score >= 20) msg = "Tu as les bases, mais il y a encore des confusions entre le PHP et le SQL. Refais ce QCM ! 💪";
+    else msg = "Ne te décourage pas ! Relis bien les explications ligne par ligne, la logique va finir par rentrer. 🧠";
+    
+    document.getElementById('feedback-message').innerText = msg;
+}
+
+// Démarrer le quiz
+loadQuestion();
+</script>
+
+</body>
+</html>
+
